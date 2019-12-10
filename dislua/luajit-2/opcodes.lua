@@ -1,3 +1,11 @@
+--[[
+	Project: DisLua.
+	Author: imring <fishlake-scripts.ru>.
+    License: MIT License.
+    
+	Project "DisLua" is a parser of bytecode LuaJIT.
+	Details: https://github.com/FishLake-Scripts/DisLua
+]]
 local ARGS_AD = 1
 local ARGS_ABC = 2
 
