@@ -285,7 +285,7 @@ return function(path)
 		sizebc = self:read_uleb128()
 	
 		if bit.band(self.flags, BCDUMP_F_STRIP) <= 0 then
-			print(2)
+			error('Not supported')
 		end
 	
 		local pt = {
@@ -310,9 +310,10 @@ return function(path)
 		self:read_kgc(pt, sizekgc)
 		self:read_knum(pt, sizekn)
 
-		pt.len = self.buffer.index - pt.pos
+		local ptend = self.buffer.index
+		pt.len = ptend - pt.pos
 		setmetatable(pt, { __tostring = function(this)
-			return ('proto:%08X-%08X'):format(pt.pos, self.buffer.index)
+			return ('proto:%08X-%08X'):format(pt.pos, ptend)
 		end })
 		return pt
 	end
