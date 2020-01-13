@@ -6,8 +6,8 @@
 	Project "DisLua" is a parser of bytecode LuaJIT.
     Details: https://github.com/FishLake-Scripts/DisLua
     
-    USAGE:
-        luajit bytecode-list.lua in.luac [out.lua]
+    This example displays opcodes of proto.
+    USAGE: luajit bytecode-list.lua in.luac [out.lua]
 ]]
 local dislua = require 'dislua.init'
 require 'tostring' -- http://lua-users.org/wiki/TableUtils
@@ -31,12 +31,12 @@ local function fix_string(str)
 end
 
 if arg[1] == nil then
-    return error('Not found file.')
+    return print('USAGE: luajit bytecode-list.lua input [output] ')
 end
 
 local result, parser = dislua(arg[1])
 if result == false then
-    return error('File is corrupt or not supported')
+    return print('ERROR: File is corrupt or not supported')
 end
 
 local result, out = pcall(io.open, arg[2], 'w')
@@ -51,6 +51,15 @@ local function is_jump(addr)
         if jmps_addr[i] == addr then return true end
     end
     return false
+end
+
+local function check_types(...)
+    for i = 1, select('#', ...), 2 do
+        local valid = select(i, ...)
+        local current = type(select(i + 1, ...))
+        if valid ~= current then return false end
+    end
+    return true
 end
 
 for i = 1, #parser.protos do
@@ -76,25 +85,30 @@ for i = 1, #parser.protos do
     for l = 1, #proto.BCIns do
         local bc = proto.BCIns[l]
         local current_pos = bc.pos
-        local comments = ''
+        local comments
 
         local kgcmax = #proto.kgc
         
         if bc.opcode == 51 then -- FNEW
             local field2 = bc.fields[2]
-            comments = (' ; -- %s'):format(tostring(proto.kgc[kgcmax - field2]))
-        elseif bc.opcode == 54 or bc.opcode == 39 or bc.opcode == 55 or bc.opcode == 6 or bc.opcode == 7 then -- KSTR, GGET, TGETS, etc
+            local val = proto.kgc[kgcmax - field2]
+            comments = check_types('table', val) and (' ; -- %s'):format(val)
+        elseif bc.opcode == 54 or bc.opcode == 39 or bc.opcode == 55 or bc.opcode == 6 or bc.opcode == 7 then -- KSTR, GGET, GSET, etc
             local field2 = bc.fields[2]
-            comments = (' ; "%s"'):format(fix_string(proto.kgc[kgcmax - field2]))
+            local val = proto.kgc[kgcmax - field2]
+            comments = check_types('string', val) and (' ; "%s"'):format(fix_string(val))
         elseif bc.opcode == 42 or bc.opcode == 8 or bc.opcode == 9 then -- KNUM, etc
-			local field2 = bc.fields[2]
-            comments = (' ; %d'):format(proto.knum[field2 + 1])
+            local field2 = bc.fields[2]
+            local val = proto.knum[field2 + 1]
+            comments = check_types('number', val) and (' ; %d'):format(val)
         elseif bc.opcode >= 22 and bc.opcode <= 31 then -- http://wiki.luajit.org/Bytecode-2.0#binary-ops
             local field3 = bc.fields[3]
-            comments = (' ; %d'):format(proto.knum[field3 + 1])
-        elseif bc.opcode == 57 or bc.opcode == 61 then
+            local val = proto.knum[field3 + 1]
+            comments = check_types('number', val) and (' ; %d'):format(proto.knum[field3 + 1])
+        elseif bc.opcode == 57 or bc.opcode == 61 then -- TGETS, TSETS
             local field3 = bc.fields[3]
-            comments = (' ; "%s"'):format(fix_string(proto.kgc[kgcmax - field3]))
+            local val = proto.kgc[kgcmax - field3]
+            comments = check_types('string', val) and (' ; "%s"'):format(fix_string(val))
         elseif bc.opcode >= 77 and bc.opcode <= 88 and bc.opcode ~= 81 and bc.opcode ~= 83 and bc.opcode ~= 86
             or bc.opcode == 72 or bc.opcode == 50 then -- http://wiki.luajit.org/Bytecode-2.0#loops-and-branches
             local field2 = bc.fields[2]
@@ -102,23 +116,28 @@ for i = 1, #parser.protos do
             bc.fields[2] = ('%08x (%d)'):format(addr, field2 - 0x8000 + 1)
         elseif bc.opcode == 53 then -- TDUP
             local field2 = bc.fields[2]
-            comments = (' ; %s'):format(table.tostring(proto.kgc[kgcmax - field2]))
+            local val = proto.kgc[kgcmax - field2]
+            comments = check_types('table', val) and (' ; %s'):format(table.tostring(val))
         elseif bc.opcode == 45 then -- UGET
             local field2 = bc.fields[2]
-			comments = (' ; -- %08X'):format(proto.uv_data[field2])
+            local val = proto.uv_data[field2]
+			comments = check_types('number', val) and (' ; -- %08X'):format(val)
         elseif bc.opcode == 46 or bc.opcode == 49 then -- USETV
             local field1 = bc.fields[1]
-			comments = (' ; -- %08X'):format(proto.uv_data[field1])
+            local val = proto.uv_data[field1]
+            comments = check_types('number', val) and (' ; -- %08X'):format(val)
         elseif bc.opcode == 47 then -- USETS
             local field1, field2 = bc.fields[1], bc.fields[2]
-            comments = (' ; "%s" -- %08X'):format(fix_string(proto.kgc[kgcmax - field2]), proto.uv_data[field1])
+            local val1, val2 = proto.kgc[kgcmax - field2], proto.uv_data[field1]
+            comments = check_types('string', val1, 'number', val2) and (' ; "%s" -- %08X'):format(fix_string(val1), val2)
         elseif bc.opcode == 48 then -- USETN
             local field1, field2 = bc.fields[1], bc.fields[2]
-            comments = (' ; %d -- %08X'):format(proto.knum[field2 + 1], proto.uv_data[field1])
+            local val1, val2 = proto.knum[field2 + 1], proto.uv_data[field1]
+            comments = check_types('number', val1, 'number', val2) and (' ; %d -- %08X'):format(val1, val2)
         end
         local start = ' ' .. ( is_jump(current_pos) and '=>' or '  ' ) .. ' ' .. bc.name
 		local argstr = table.concat(bc.fields, '\t')
-		out:write(('%08x%s (%d)\t%s%s\n'):format(current_pos, start, bc.opcode, argstr, comments))
+		out:write(('%08x%s (%d)\t%s%s\n'):format(current_pos, start, bc.opcode, argstr, comments or ''))
     end
 
     out:write('\n')
